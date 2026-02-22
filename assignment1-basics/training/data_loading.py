@@ -1,9 +1,10 @@
-import numpy.typing as npt
+import numpy as np
 import torch
 import random
 
+
 def load_batched_data(
-	dataset: npt.NDArray, 
+	dataset: np.typing.NDArray, 
 	batch_size: int, 
 	context_length: int, 
 	device: str

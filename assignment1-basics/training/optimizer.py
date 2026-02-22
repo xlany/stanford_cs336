@@ -39,21 +39,16 @@ class AdamW(torch.optim.Optimizer):
 		lr: float, 
 		weight_decay: float, 
 		betas: tuple[float, float],
-		eps: float):
+		eps: float = 1e-8):
 
 		# Surprisingly we cannot do params = [params] because that is a generator that gets consumed by m/v setup
 		# Instead we gotta explicitly turn into an iterable via list()
 		params = list(params)
 
-		# Start off the moment vectors = zeros b/c we haven't taken any steps
-		m = torch.zeros_like(params[0])
-		v = torch.zeros_like(params[0])
-
 		defaults = {
 			"lr": lr,
 			"weight_decay": weight_decay,
 			"betas": betas,
-			"moments": (m, v),
 			"eps": eps,
 			}
 
@@ -106,7 +101,9 @@ class AdamW(torch.optim.Optimizer):
 
 				state = self.state[p]
 				t = state.get("t", 1)  # Start from 1
-				m, v = group["moments"]
+				# Start off the moment vectors = zeros b/c we haven't taken any steps
+				m = state.get("m", torch.zeros_like(p.data))
+				v = state.get("v", torch.zeros_like(p.data))
 
 				grad = p.grad.data  # Get the gradient of loss with respect to p.
 				m = beta1 * m + (1 - beta1) * grad
@@ -116,8 +113,9 @@ class AdamW(torch.optim.Optimizer):
 				p.data -= lr_t * m / (torch.sqrt(v) + eps)  # Step w regard to learning
 				p.data -= lr * weight_decay * p.data		# Step w regard to weight decay
 
-				group["moments"] = (m, v)
 				state["t"] = t + 1  # Increment iteration number.
+				state["m"] = m
+				state["v"] = v
 
 		return loss
 

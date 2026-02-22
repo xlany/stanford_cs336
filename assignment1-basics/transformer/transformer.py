@@ -6,6 +6,8 @@ import transformer.positionwise_feedforward as positionwise_feedforward
 import transformer.linear as linear
 import transformer.embedding as embedding
 import transformer.softmax as softmax
+import typing
+import itertools
 
 class TransformerBlock():
 
@@ -15,7 +17,7 @@ class TransformerBlock():
 		num_heads: int, 
 		d_ff: int,
 		rope_config: rope.RopeConfig | None = None,
-		) -> None:
+	) -> None:
 		self.rmsnorm1 = rmsnorm.RMSNorm(d_model)
 		self.rmsnorm2 = rmsnorm.RMSNorm(d_model)
 		self.multihead_self_attention = attention.CausalMultiHeadSelfAttention(d_model, num_heads, rope_config)
@@ -90,10 +92,17 @@ class TransformerBlock():
 
 		ffn_output = self.ffn.forward(self.rmsnorm2.forward(layer1))
 		return layer1 + ffn_output
-
+			
+	def parameters(self) -> typing.Iterable:
+		"""Expose parameters for optimization."""
+		return itertools.chain(
+			self.rmsnorm1.parameters(),
+			self.multihead_self_attention.parameters(),
+			self.rmsnorm2.parameters(),
+			self.ffn.parameters()
+		)
 
 class Transformer():
-
 	def __init__(
 		self,
 	    vocab_size: int,
@@ -103,7 +112,7 @@ class Transformer():
 	    num_heads: int,
 	    d_ff: int,
 	    rope_theta: float,
-		) -> None:
+	) -> None:
 		self.num_layers = num_layers
 		self.token_embedding = embedding.Embedding(vocab_size, d_model)
 		rope_config = rope.RopeConfig(theta=rope_theta, max_seq_len=context_length, d_k=int(d_model / num_heads))
@@ -185,4 +194,11 @@ class Transformer():
 		output_embedding = self.output_embedding.forward(normalized_transformer_output)
 		return output_embedding
 
-
+	def parameters(self) -> typing.Iterable:
+		"""Expose parameters for optimization."""
+		return itertools.chain(
+			self.token_embedding.parameters(),
+			*[transformer_block.parameters() for transformer_block in self.transformer_blocks],
+			self.rmsnorm.parameters(),
+			self.output_embedding.parameters()
+		)
