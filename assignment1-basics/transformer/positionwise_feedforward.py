@@ -8,7 +8,10 @@ class SwiGLU(torch.nn.Module):
 	def __init__(
 		self,
 		d_model: int,
-		d_ff: int | None = None):
+		d_ff: int | None = None,
+		device: torch.device | None = None, 
+		dtype: torch.dtype | None = None,
+	):
 
 		super().__init__()
 
@@ -21,9 +24,9 @@ class SwiGLU(torch.nn.Module):
 			multiple_64 = math.ceil((8/3 * self.d_model)/64)
 			self.d_ff = multiple_64 * 64
 
-		self.W1 = linear.Linear(self.d_model, self.d_ff)
-		self.W3 = linear.Linear(self.d_model, self.d_ff)
-		self.W2 = linear.Linear(self.d_ff, self.d_model)
+		self.W1 = linear.Linear(self.d_model, self.d_ff, device, dtype)
+		self.W3 = linear.Linear(self.d_model, self.d_ff, device, dtype)
+		self.W2 = linear.Linear(self.d_ff, self.d_model, device, dtype)
 
 
 	def SiLU(self, x: torch.Tensor):

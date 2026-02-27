@@ -17,6 +17,7 @@ import time
 
 END_OF_TEXT = '<|endoftext|>'
 INITIAL_VOCAB_SIZE = 256
+END_OF_TEXT_TOKEN = INITIAL_VOCAB_SIZE + 1
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 COMPILED_PAT = re.compile(PAT)
 NUM_PROCESSES = os.cpu_count()

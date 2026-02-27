@@ -63,11 +63,13 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
 	"""Use multiple attention heads."""
 
 	def __init__(
-			self, 
-			d_model: int, 
-			num_heads: int,
-			rope_config: rope.RopeConfig | None = None
-			):
+		self, 
+		d_model: int, 
+		num_heads: int,
+		rope_config: rope.RopeConfig | None = None,
+		device: torch.device | None = None, 
+		dtype: torch.dtype | None = None,
+	):
 		"""Initialize Q, W, V, combination layer.
 
 
@@ -82,17 +84,20 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
 		self.d_k = int(d_model / num_heads)
 		self.d_v = int(d_model / num_heads)
 
-		self.all_WQ = torch.nn.ModuleList([linear.Linear(self.d_k, self.d_model) for _ in range(self.num_heads)])
-		self.all_WK = torch.nn.ModuleList([linear.Linear(self.d_k, self.d_model) for _ in range(self.num_heads)])
-		self.all_WV = torch.nn.ModuleList([linear.Linear(self.d_v, self.d_model) for _ in range(self.num_heads)])
-		self.W_O = linear.Linear(self.num_heads * self.d_v, self.d_model)
+		self.all_WQ = torch.nn.ModuleList([linear.Linear(self.d_model, self.d_k, device, dtype) for _ in range(self.num_heads)])
+		self.all_WK = torch.nn.ModuleList([linear.Linear(self.d_model, self.d_k, device, dtype) for _ in range(self.num_heads)])
+		self.all_WV = torch.nn.ModuleList([linear.Linear(self.d_model, self.d_v, device, dtype) for _ in range(self.num_heads)])
+		self.W_O = linear.Linear(self.num_heads * self.d_v, self.d_model, device, dtype)
 
 		self.rope = None
 		if rope_config:
 			self.rope = rope.RotaryPositionalEmbedding(
 				theta=rope_config.theta,
 				d_k=rope_config.d_k,
-				max_seq_len=rope_config.max_seq_len)
+				max_seq_len=rope_config.max_seq_len,
+				device=device,
+				dtype=dtype,
+			)
 
 
 	def from_weights(self, q_weights: torch.Tensor, k_weights: torch.Tensor, v_weights: torch.Tensor, o_weights: torch.Tensor) -> None:
@@ -169,11 +174,11 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
 			# Example query or key shape: 		[batch_size sequence_length d_k] = [4, 12, 16]
 			# Example token_positions shape: 	[sequence_length] = [12]
 			# Example token_positions: 		 	[0, 1, 2, ..., 11]
-			token_positions = torch.arange(0, sequence_len)
+			token_positions = torch.arange(0, sequence_len, device=x.device)
 			Q = [self.rope.forward(q, token_positions) for q in Q]	
 			K = [self.rope.forward(k, token_positions) for k in K]
 
-		all_true = torch.full((sequence_len, sequence_len), True, dtype=torch.bool)  # [sequence_length sequence_length]
+		all_true = torch.full((sequence_len, sequence_len), True, device=x.device, dtype=torch.bool)  # [sequence_length sequence_length]
 		causal_mask = torch.tril(all_true, diagonal=0)		# Make the bottom triangle all True because each token can only look at itself and the ones before it
 															# T F F
 															# T T F

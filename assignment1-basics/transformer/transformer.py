@@ -9,7 +9,7 @@ import transformer.softmax as softmax
 import typing
 import itertools
 
-class TransformerBlock():
+class TransformerBlock(torch.nn.Module):
 
 	def __init__(
 		self, 
@@ -17,11 +17,15 @@ class TransformerBlock():
 		num_heads: int, 
 		d_ff: int,
 		rope_config: rope.RopeConfig | None = None,
+		device: torch.device | None = None, 
+		dtype: torch.dtype | None = None,
 	) -> None:
-		self.rmsnorm1 = rmsnorm.RMSNorm(d_model)
-		self.rmsnorm2 = rmsnorm.RMSNorm(d_model)
-		self.multihead_self_attention = attention.CausalMultiHeadSelfAttention(d_model, num_heads, rope_config)
-		self.ffn = positionwise_feedforward.SwiGLU(d_model, d_ff)
+		super().__init__()
+
+		self.rmsnorm1 = rmsnorm.RMSNorm(d_model, device=device, dtype=dtype)
+		self.rmsnorm2 = rmsnorm.RMSNorm(d_model, device=device, dtype=dtype)
+		self.multihead_self_attention = attention.CausalMultiHeadSelfAttention(d_model, num_heads, rope_config, device, dtype)
+		self.ffn = positionwise_feedforward.SwiGLU(d_model, d_ff, device, dtype)
 
 	def from_weights(self, weights: dict[str, torch.Tensor]) -> None:
 		"""Initialize from weights."""
@@ -93,16 +97,8 @@ class TransformerBlock():
 		ffn_output = self.ffn.forward(self.rmsnorm2.forward(layer1))
 		return layer1 + ffn_output
 			
-	def parameters(self) -> typing.Iterable:
-		"""Expose parameters for optimization."""
-		return itertools.chain(
-			self.rmsnorm1.parameters(),
-			self.multihead_self_attention.parameters(),
-			self.rmsnorm2.parameters(),
-			self.ffn.parameters()
-		)
 
-class Transformer():
+class Transformer(torch.nn.Module):
 	def __init__(
 		self,
 	    vocab_size: int,
@@ -112,13 +108,17 @@ class Transformer():
 	    num_heads: int,
 	    d_ff: int,
 	    rope_theta: float,
+		device: torch.device | None = None, 
+		dtype: torch.dtype | None = None,
 	) -> None:
+		super().__init__()
+
 		self.num_layers = num_layers
-		self.token_embedding = embedding.Embedding(vocab_size, d_model)
+		self.token_embedding = embedding.Embedding(vocab_size, d_model, device, dtype)
 		rope_config = rope.RopeConfig(theta=rope_theta, max_seq_len=context_length, d_k=int(d_model / num_heads))
-		self.transformer_blocks = [TransformerBlock(d_model, num_heads, d_ff, rope_config) for _ in range(num_layers)]
-		self.rmsnorm = rmsnorm.RMSNorm(d_model)
-		self.output_embedding = linear.Linear(d_model, vocab_size)
+		self.transformer_blocks = torch.nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, rope_config, device, dtype) for _ in range(num_layers)])
+		self.rmsnorm = rmsnorm.RMSNorm(d_model, device=device, dtype=dtype)
+		self.output_embedding = linear.Linear(d_model, vocab_size, device, dtype)
 
 
 	def from_weights(self, weights: dict[str, torch.Tensor]) -> None:

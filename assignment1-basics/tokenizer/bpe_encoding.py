@@ -162,7 +162,7 @@ class Tokenizer():
 			return encoded_texts
 
 
-	def encode(self, text: str) -> list[str]:
+	def encode(self, text: str) -> list[int]:
 		"""Encode the text.
 
 		Input: string

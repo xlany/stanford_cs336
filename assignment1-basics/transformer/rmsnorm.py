@@ -25,7 +25,7 @@ class RMSNorm(torch.nn.Module):
 		self.eps = eps
 
 		# Initialize to all ones at first
-		self.g = torch.ones(self.d_model)
+		self.g = torch.ones(self.d_model, device=device, dtype=dtype)
 
 		# Make tensor trainable
 		self.g = torch.nn.Parameter(self.g)

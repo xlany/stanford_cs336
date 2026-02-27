@@ -7,7 +7,10 @@ def clip_gradients(
 	max_l2_norm: float, 
 	eps: float = 10 ** -6,
 	) -> Iterable[torch.nn.Parameter]:
-	"""If the gradients are too large overall, clip them to be close to max_l2_norm."""
+	"""If the gradients are too large overall, clip them to be close to max_l2_norm.
+	
+	This method modifies the gradients in-place and also returns them.
+	"""
 	grads = [parameter.grad for parameter in parameters]
 	grads_tensor = torch.cat([grad.flatten() for grad in grads if grad is not None])
 	l2_norm = torch.linalg.norm(grads_tensor)

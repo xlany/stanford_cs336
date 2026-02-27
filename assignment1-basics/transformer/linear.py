@@ -8,7 +8,8 @@ class Linear(torch.nn.Module):
 		in_features: int, 
 		out_features: int, 
 		device: torch.device | None = None, 
-		dtype: torch.dtype | None = None):
+		dtype: torch.dtype | None = None,
+	):
 		"""Create randomized W."""
 
 		# Any subclass of torch.nn.Module needs to call the 
@@ -16,7 +17,7 @@ class Linear(torch.nn.Module):
 		super().__init__()
 
 		# Make tensor shape
-		self.W = torch.empty(out_features, in_features)
+		self.W = torch.empty(out_features, in_features, device=device, dtype=dtype)
 
 		# Make tensor trainable
 		self.W = torch.nn.Parameter(self.W)

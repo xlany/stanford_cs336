@@ -24,7 +24,7 @@ class Embedding(torch.nn.Module):
 		# Make tensor shape
 		self.vocab_size = num_embeddings
 		self.d_model = embeddings_dim
-		self.W = torch.empty(self.vocab_size, self.d_model)
+		self.W = torch.empty(self.vocab_size, self.d_model, device=device, dtype=dtype)
 
 		# Make tensor trainable
 		self.W = torch.nn.Parameter(self.W)
