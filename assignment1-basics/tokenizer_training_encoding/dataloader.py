@@ -31,7 +31,10 @@ class DataLoader:
 
 
 	def load_data_chunk(self, num_chunks: int) -> list[list[str]]:
-		"""Load data in chunks according to END_OF_TEXT."""
+		"""Load data in chunks according to END_OF_TEXT.
+    
+    We split on END_OF_TEXT but also need to keep it as part of the chunk.
+    """
 		pattern = "|".join(re.escape(token) for token in self.special_tokens)
 
 		chunks: list[list[str]] = []
@@ -43,8 +46,9 @@ class DataLoader:
 				f.seek(start)
 				chunk = f.read(end - start).decode("utf-8", errors="ignore")
 
-				mini_chunk = re.split(pattern, chunk)
-				chunks.append([c for c in mini_chunk if c])
+				mini_chunk = re.split(f'({pattern})', chunk)
+				combined = [mini_chunk[i]+mini_chunk[i+1] for i in range(0, len(mini_chunk)-1, 2)]
+				chunks.append([c for c in combined if c])
 
 		return [c for c in chunks if c]
 	
