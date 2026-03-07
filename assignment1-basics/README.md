@@ -48,3 +48,7 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+### Experiment log
+
+https://docs.google.com/document/d/1gCbMpVng3XzAlOpuqxgGfqgu0ITrXkXXWErvD7r9XME/edit?usp=sharing
+
