@@ -1,0 +1,492 @@
+2 Byte-Pair Encoding Tokenizer
+
+2.1 The Unicode Standard
+(a)  
+>>> chr(0)
+'\x00'
+>>> print(chr(0))
+
+
+The chr(0) represents nothing aka empty string
+
+(b) 
+>>> print(chr(0))
+
+
+>>> repr(chr(0))
+"'\\x00'"
+
+The printer representation is empty string whereas the repr is a unicode
+
+
+(c)
+>>> "hello" + chr(0) + "world"
+'hello\x00world'
+>>> print( "hello" + chr(0) + "world")
+helloworld
+
+
+It's represented as a unicode but when printed it renders as empty string
+
+
+2.2 Unicode Encodings
+
+(a) UTF-8 shorter and saves memory compared to UTF-16 and UTF-32
+
+>>> encoded8 = test_string.encode('utf-8')
+>>> print(encoded8)
+b'hello \xe4\xbd\xa0\xe5\xa5\xbd'
+>>> list(encoded8)
+[104, 101, 108, 108, 111, 32, 228, 189, 160, 229, 165, 189]
+>>> len(encoded8)
+12
+=
+
+
+>>> encoded16 = test_string.encode('utf-16')
+>>> encoded16
+b'\xff\xfeh\x00e\x00l\x00l\x00o\x00 \x00`O}Y'
+>>> len(encoded16)
+18
+>>> list(encoded16)
+[255, 254, 104, 0, 101, 0, 108, 0, 108, 0, 111, 0, 32, 0, 96, 79, 125, 89]
+
+
+>>> encoded32 = test_string.encode('utf-32')
+>>> len(encoded32)
+36
+>>> print(encoded32)
+b'\xff\xfe\x00\x00h\x00\x00\x00e\x00\x00\x00l\x00\x00\x00l\x00\x00\x00o\x00\x00\x00 \x00\x00\x00`O\x00\x00}Y\x00\x00'
+>>> list(encoded32)
+[255, 254, 0, 0, 104, 0, 0, 0, 101, 0, 0, 0, 108, 0, 0, 0, 108, 0, 0, 0, 111, 0, 0, 0, 32, 0, 0, 0, 96, 79, 0, 0, 125, 89, 0, 0]
+
+(b) Not all string is represented by one byte character which is what the function assumes! For example Chinese characters are represented by 3 bytes. 
+
+>>> decode_utf8_bytes_to_str_wrong("hello".encode("utf-8"))
+'hello'
+>>> decode_utf8_bytes_to_str_wrong("你好".encode("utf-8"))
+Traceback (most recent call last):
+  File "<python-input-3>", line 1, in <module>
+    decode_utf8_bytes_to_str_wrong("你好".encode("utf-8"))
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-input-1>", line 2, in decode_utf8_bytes_to_str_wrong
+    return "".join([bytes([b]).decode("utf-8") for b in bytestring])
+                    ~~~~~~~~~~~~~~~~~^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe4 in position 0: unexpected end of data
+
+(c) 
+>>> "好".encode("utf-8")
+b'\xe5\xa5\xbd'
+
+These three bytes would decode to a character but if we only take the first two bytes (b'\xe5\xa5') they would not
+
+
+2.5 BPE Tokenizer Training
+
+TinyStories
+
+(a) Time: I was able to get it down from 25 mins to 10 mins to 1.5 mins:)
+Memory: 3.5 GB RAM
+Longest tokens: 
+  1. "7160": " accomplishment"
+  2. "9143": " disappointment"
+  3. "9379": " responsibility"
+  All are 26 letters long. These tokens make sense.
+
+(b) The total was around 90 seconds.
+The part that took longest time was data pretokenization (73 seconds)
+The training part was fast (13 seconds) because I put in a ton of optimizations!
+
+
+Profiling command: python -m cProfile -s cumulative train_bpe_tinystories.py
+Total step time:  13.285897016525269
+Peak memory usage: 3523.92 MB = 3.5 GB RAM
+Time elapsed:  90.85343408584595
+         7479732 function calls (7478997 primitive calls) in 90.884 seconds
+
+   Ordered by: cumulative time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       35    0.000    0.000  139.865    3.996 pool.py:500(_wait_for_updates)
+     46/1    0.000    0.000   90.884   90.884 {built-in method builtins.exec}
+        1    0.449    0.449   90.884   90.884 train_bpe_tinystories.py:1(<module>)
+        1    0.031    0.031   90.371   90.371 bpe.py:207(train)
+       20    0.045    0.002   77.716    3.886 connection.py:202(send)
+       25    0.000    0.000   75.798    3.032 connection.py:406(_send_bytes)
+       35    0.000    0.000   75.797    2.166 connection.py:381(_send)
+       68    3.333    0.049   75.797    1.115 {built-in method posix.write}
+        1    0.060    0.060   73.118   73.118 bpe.py:70(pretokenize_and_count_parallel)
+        1    0.000    0.000   73.057   73.057 pool.py:738(__exit__)
+        1    0.000    0.000   72.974   72.974 pool.py:654(terminate)
+       17    0.000    0.000   72.476    4.263 util.py:197(__call__)
+        1    0.000    0.000   72.476   72.476 pool.py:680(_terminate_pool)
+        1    0.000    0.000   72.465   72.465 pool.py:671(_help_stuff_finish)
+        1    0.000    0.000   72.465   72.465 {method 'acquire' of '_multiprocessing.SemLock' objects}
+      3/1    0.000    0.000   72.464   72.464 threading.py:1000(_bootstrap)
+      3/1    0.000    0.000   72.464   72.464 threading.py:1027(_bootstrap_inner)
+      3/1    0.000    0.000   72.464   72.464 threading.py:983(run)
+        1    0.000    0.000   72.464   72.464 pool.py:527(_handle_tasks)
+        1    0.000    0.000   72.464   72.464 pool.py:573(_handle_results)
+       73    0.001    0.000   72.404    0.992 connection.py:1134(wait)
+       73    0.002    0.000   68.947    0.944 selectors.py:385(select)
+       73   63.680    0.872   68.939    0.944 {method 'poll' of 'select.poll' objects}
+       37    0.000    0.000   67.477    1.824 queues.py:372(empty)
+       38    0.000    0.000   67.477    1.776 connection.py:253(poll)
+       38    0.000    0.000   67.448    1.775 connection.py:439(_poll)
+        1    0.036    0.036   13.455   13.455 bpe.py:175(train_bpe)
+     9743    6.798    0.001   10.698    0.001 bpe.py:96(max_count_neighbors)
+        1    0.000    0.000    5.025    5.025 pool.py:362(map)
+        1    0.000    0.000    5.025    5.025 pool.py:767(get)
+24909/24908    3.899    0.000    3.899    0.000 {built-in method builtins.max}
+        1    0.251    0.251    3.768    3.768 bpe.py:37(load_data_chunk)
+  106/102    3.459    0.033    3.459    0.034 {built-in method posix.read}
+    26/22    0.000    0.000    3.455    0.157 connection.py:390(_recv)
+     9743    1.616    0.000    2.543    0.000 bpe.py:113(merge_data)
+       10    0.000    0.000    2.418    0.242 regex.py:314(split)
+       10    2.417    0.242    2.417    0.242 {method 'split' of '_regex.Pattern' objects}
+
+OpenWebText
+
+(a) Time: no-heap (3 hours) vs heap (5 hours). Surprisingly the no-heap implementation went a lot faster!
+Memory: peak 43 GB
+Longest token: "----------------------------------------------------------------"
+  This is very different than TinyStories which is just normal words in story text. 
+  Whereas in OpenWebText this is a common divider symbol!
+
+(b) The tokenizer trained on TinyStories almost all follow a pattern of space + English word. Whereas the tokenizer trained on OpenWebTest is a lot more varied with:
+  Characters from other languages
+  Symbols/emojis
+  Formatting (i.e. "\",\"")
+
+Profiling -- No heap
+
+Total step time:  10173.17001247406
+Current memory usage: 16.54 MB
+Peak memory usage: 39546.50 MB
+Time elapsed:  11114.937443733215 = 3 hours
+         1287971479 function calls (1287970738 primitive calls) in 11114.894 seconds
+
+   Ordered by: cumulative time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     47/1    0.003    0.000 11114.894 11114.894 {built-in method builtins.exec}
+        1  108.478  108.478 11114.894 11114.894 train_owt_train.py:1(<module>)
+        1    9.454    9.454 11005.224 11005.224 bpe.py:266(train)
+        1  116.366  116.366 10445.438 10445.438 bpe.py:230(train_bpe)
+    31743 5089.004    0.160 7951.916    0.251 bpe.py:161(merge_data)
+    31743 1555.815    0.049 2103.529    0.066 bpe.py:145(max_count_neighbors)
+ 72062904 1118.603    0.000 1122.057    0.000 bpe.py:157(pairs)
+     9733    0.127    0.000 1095.571    0.113 connection.py:1134(wait)
+288185719  852.327    0.000  852.327    0.000 {method 'add' of 'set' objects}
+268810183  790.603    0.000  790.603    0.000 {method 'discard' of 'set' objects}
+     4865    0.020    0.000  738.800    0.152 pool.py:500(_wait_for_updates)
+     4868    0.032    0.000  665.277    0.137 connection.py:253(poll)
+68912/68911  547.648    0.008  547.648    0.008 {built-in method builtins.max}
+        1   18.457   18.457  510.829  510.829 bpe.py:119(pretokenize_and_count_parallel)
+        1    0.001    0.001  492.371  492.371 pool.py:738(__exit__)
+     9733    0.165    0.000  474.237    0.049 selectors.py:385(select)
+     9733   15.385    0.002  461.908    0.047 {method 'poll' of 'select.poll' objects}
+     4868    0.015    0.000  433.876    0.089 connection.py:439(_poll)
+        1    0.000    0.000  399.623  399.623 pool.py:654(terminate)
+       17    0.000    0.000  399.089   23.476 util.py:197(__call__)
+        1    0.007    0.007  399.087  399.087 pool.py:680(_terminate_pool)
+        1    0.000    0.000  399.051  399.051 pool.py:671(_help_stuff_finish)
+        1    0.002    0.002  399.051  399.051 {method 'acquire' of '_multiprocessing.SemLock' objects}
+      3/1    0.000    0.000  399.049  399.049 threading.py:1000(_bootstrap)
+      3/1    0.000    0.000  399.049  399.049 threading.py:1027(_bootstrap_inner)
+      3/1    0.000    0.000  399.049  399.049 threading.py:983(run)
+        1    0.000    0.000  399.049  399.049 pool.py:573(_handle_results)
+     4867    0.004    0.000  301.711    0.062 queues.py:372(empty)
+        1  163.849  163.849  272.090  272.090 bpe.py:132(count_neighbors)
+8527/8523  230.351    0.027  260.882    0.031 {built-in method posix.read}
+    66/62    0.004    0.000  245.297    3.956 connection.py:390(_recv)
+267092889  172.301    0.000  172.301    0.000 {method 'append' of 'list' objects}
+       40    0.229    0.006  169.061    4.227 connection.py:202(send)
+     4865    0.008    0.000  156.801    0.032 pool.py:333(_maintain_pool)
+
+
+Profiling -- With heap
+
+Total step time:  15699.442746400833
+Current memory usage: 16.52 MB
+Peak memory usage: 43545.22 MB = 43.54522 GB
+Time elapsed:  17502.871684074402 = 5 hours
+         1848226060 function calls (1848225319 primitive calls) in 17502.683 seconds
+
+   Ordered by: cumulative time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     47/1    0.001    0.000 17502.682 17502.682 {built-in method builtins.exec}
+        1  148.278  148.278 17502.682 17502.682 train_owt_train.py:1(<module>)
+        1  817.018  817.018 17353.083 17353.083 bpe.py:267(train)
+        1  192.832  192.832 15974.041 15974.041 bpe.py:231(train_bpe)
+    31743 5623.382    0.177 13482.153    0.425 bpe.py:162(merge_data)
+ 40080200 3783.197    0.000 3808.800    0.000 bpe.py:36(push)
+    31743  420.188    0.013 2022.450    0.064 bpe.py:39(pop)
+ 72062904 1900.799    0.000 1904.698    0.000 bpe.py:157(pairs)
+519177327 1408.572    0.000 1408.572    0.000 {method 'add' of 'set' objects}
+ 21355370 1077.423    0.000 1234.241    0.000 {built-in method _heapq.heappop}
+268810183  998.418    0.000  998.418    0.000 {method 'discard' of 'set' objects}
+     2827    0.022    0.000  964.763    0.341 connection.py:253(poll)
+     2824    0.015    0.000  877.829    0.311 pool.py:500(_wait_for_updates)
+     5651    0.084    0.000  748.029    0.132 connection.py:1134(wait)
+     2827    0.011    0.000  598.939    0.212 connection.py:439(_poll)
+     2826    0.003    0.000  581.518    0.206 queues.py:372(empty)
+        1   18.200   18.200  520.853  520.853 bpe.py:119(pretokenize_and_count_parallel)
+        1    0.001    0.001  502.652  502.652 pool.py:738(__exit__)
+     5651    0.188    0.000  466.241    0.083 selectors.py:385(select)
+     5651    7.723    0.001  464.585    0.082 {method 'poll' of 'select.poll' objects}
+        1    0.002    0.002  414.510  414.510 pool.py:654(terminate)
+       17    0.000    0.000  414.019   24.354 util.py:197(__call__)
+        1    0.004    0.004  414.004  414.004 pool.py:680(_terminate_pool)
+        1    0.000    0.000  413.964  413.964 pool.py:671(_help_stuff_finish)
+        1    0.002    0.002  413.964  413.964 {method 'acquire' of '_multiprocessing.SemLock' objects}
+      3/1    0.000    0.000  413.962  413.962 threading.py:1000(_bootstrap)
+      3/1    0.000    0.000  413.962  413.962 threading.py:1027(_bootstrap_inner)
+      3/1    0.001    0.000  413.962  413.962 threading.py:983(run)
+        1    0.001    0.001  413.962  413.962 pool.py:573(_handle_results)
+    66/62    0.005    0.000  277.244    4.472 connection.py:390(_recv)
+        1  165.636  165.636  274.248  274.248 bpe.py:132(count_neighbors)
+8527/8523  244.041    0.029  273.562    0.032 {built-in method posix.read}
+       40    0.254    0.006  194.993    4.875 connection.py:202(send)
+267090848  178.905    0.000  178.905    0.000 {method 'append' of 'list' objects}
+138930066  154.055    0.000  154.055    0.000 bpe.py:72(__eq__)
+       45    0.003    0.000  127.157    2.826 connection.py:406(_send_bytes)
+       75    0.001    0.000  123.807    1.651 connection.py:381(_send)
+      108   18.509    0.171  123.806    1.146 {built-in method posix.write}
+       65  110.839    1.705  110.840    1.705 {method 'dump' of '_pickle.Pickler' objects}
+     72/8    0.001    0.000   88.181   11.023 <frozen importlib._bootstrap>:1349(_find_and_load)
+     72/8    0.000    0.000   88.179   11.022 <frozen importlib._bootstrap>:1304(_find_and_load_unlocked)
+     69/8    0.000    0.000   88.176   11.022 <frozen importlib._bootstrap>:911(_load_unlocked)
+     46/8    0.003    0.000   88.175   11.022 <frozen importlib._bootstrap_external>:1020(exec_module)
+   171/17    0.000    0.000   88.162    5.186 <frozen importlib._bootstrap>:480(_call_with_frames_removed)
+        1    0.000    0.000   88.129   88.129 pool.py:1(<module>)
+       46    0.000    0.000   87.942    1.912 <frozen importlib._bootstrap_external>:1093(get_code)
+       45   87.824    1.952   87.878    1.953 <frozen importlib._bootstrap_external>:782(_compile_bytecode)
+       45    0.154    0.003   65.306    1.451 reduction.py:48(dumps)
+        1    4.774    4.774   41.168   41.168 bpe.py:86(load_data_chunk)
+389436002/389435956   40.180    0.000   40.180    0.000 {built-in method builtins.len}
+       33   26.327    0.798   26.327    0.798 {built-in method _pickle.loads}
+ 40080200   22.637    0.000   23.441    0.000 {built-in method _heapq.heappush}
+       31    4.620    0.149   17.879    0.577 connection.py:246(recv)
+       30    0.001    0.000   17.735    0.591 regex.py:314(split)
+       30   17.684    0.589   17.684    0.589 {method 'split' of '_regex.Pattern' objects}
+     2824    0.006    0.000   16.476    0.006 pool.py:333(_maintain_pool)
+    95516   14.222    0.000   14.222    0.000 {method 'decode' of 'bytes' objects}
+    28250    0.022    0.000   13.148    0.000 process.py:224(exitcode)
+     2824    0.020    0.000    9.046    0.003 pool.py:289(_join_exited_workers)
+    28308    0.040    0.000    5.967    0.000 popen_fork.py:25(poll)
+    28308    0.389    0.000    5.803    0.000 {built-in method posix.waitpid}
+      143    4.552    0.032    4.552    0.032 {method 'read' of '_io.BufferedReader' objects}
+ 49313790    3.567    0.000    3.567    0.000 bpe.py:60(__lt__)
+ 40080200    2.162    0.000    2.162    0.000 bpe.py:57(__init__)
+    95235    1.714    0.000    1.714    0.000 {built-in method builtins.print}
+        1    0.189    0.189    0.847    0.847 __init__.py:120(dump)
+
+2.7 Tokenizer Experiments 
+
+(a) OpenWebText compression ratio is a bit higher than TinyStories compression ratio. This is probably because the vocab size is so much bigger (32k vs 10k)
+
+TinyStories
+Original length in bytes: 518
+Encoded length in bytes: 124
+Ratio: 4.18
+Original length in bytes: 623
+Encoded length in bytes: 156
+Ratio: 3.99
+Original length in bytes: 1867
+Encoded length in bytes: 458
+Ratio: 4.08
+Original length in bytes: 686
+Encoded length in bytes: 176
+Ratio: 3.9
+Original length in bytes: 657
+Encoded length in bytes: 157
+Ratio: 4.18
+Original length in bytes: 856
+Encoded length in bytes: 187
+Ratio: 4.58
+Original length in bytes: 704
+Encoded length in bytes: 156
+Ratio: 4.51
+Original length in bytes: 752
+Encoded length in bytes: 171
+Ratio: 4.4
+Original length in bytes: 594
+Encoded length in bytes: 142
+Ratio: 4.18
+Original length in bytes: 659
+Encoded length in bytes: 156
+Ratio: 4.22
+
+OpenWebText
+Original length in bytes: 4166
+Encoded length in bytes: 875
+Ratio: 4.76
+Original length in bytes: 8019
+Encoded length in bytes: 1933
+Ratio: 4.15
+Original length in bytes: 1672
+Encoded length in bytes: 341
+Ratio: 4.9
+Original length in bytes: 8501
+Encoded length in bytes: 1977
+Ratio: 4.3
+Original length in bytes: 7883
+Encoded length in bytes: 1727
+Ratio: 4.56
+Original length in bytes: 2168
+Encoded length in bytes: 494
+Ratio: 4.39
+Original length in bytes: 14860
+Encoded length in bytes: 3586
+Ratio: 4.14
+Original length in bytes: 5588
+Encoded length in bytes: 1295
+Ratio: 4.32
+Original length in bytes: 6737
+Encoded length in bytes: 1575
+Ratio: 4.28
+Original length in bytes: 6316
+Encoded length in bytes: 1402
+Ratio: 4.5
+
+
+(b) Using TinyStories tokenizer on OpenWebText leads to much lower compression ratios. The dataset-trained encoder is the absolute best on the dataset you can do so I am not surprised. 
+
+Original length in bytes: 3275
+Ratio TinyStories: 2.72
+Ratio OpenWebText: 3.83
+Original length in bytes: 2017
+Ratio TinyStories: 3.18
+Ratio OpenWebText: 4.14
+Original length in bytes: 2399
+Ratio TinyStories: 3.16
+Ratio OpenWebText: 4.33
+Original length in bytes: 5564
+Ratio TinyStories: 2.7
+Ratio OpenWebText: 4.1
+Original length in bytes: 2624
+Ratio TinyStories: 3.03
+Ratio OpenWebText: 4.73
+Original length in bytes: 4222
+Ratio TinyStories: 2.09
+Ratio OpenWebText: 2.65
+Original length in bytes: 817
+Ratio TinyStories: 3.33
+Ratio OpenWebText: 4.89
+Original length in bytes: 1930
+Ratio TinyStories: 3.03
+Ratio OpenWebText: 3.75
+Original length in bytes: 4139
+Ratio TinyStories: 3.03
+Ratio OpenWebText: 4.66
+Original length in bytes: 2459
+Ratio TinyStories: 3.24
+Ratio OpenWebText: 4.81
+
+Bonus: using OpenWebText tokenizer on TinyStories is worse
+Because TinyStories tokenizer is trained for TinyStories. The gap is much smaller because the OpenWebText vocab size makes up for some of it. 
+
+Original length in bytes: 550
+Ratio TinyStories: 3.87
+Ratio OpenWebText: 3.62
+Original length in bytes: 2170
+Ratio TinyStories: 3.8
+Ratio OpenWebText: 3.63
+Original length in bytes: 641
+Ratio TinyStories: 4.42
+Ratio OpenWebText: 4.14
+Original length in bytes: 909
+Ratio TinyStories: 3.99
+Ratio OpenWebText: 3.82
+Original length in bytes: 731
+Ratio TinyStories: 3.81
+Ratio OpenWebText: 3.81
+Original length in bytes: 965
+Ratio TinyStories: 4.05
+Ratio OpenWebText: 4.04
+Original length in bytes: 807
+Ratio TinyStories: 4.41
+Ratio OpenWebText: 4.41
+Original length in bytes: 612
+Ratio TinyStories: 4.25
+Ratio OpenWebText: 4.25
+Original length in bytes: 796
+Ratio TinyStories: 4.35
+Ratio OpenWebText: 4.35
+Original length in bytes: 696
+Ratio TinyStories: 4.24
+Ratio OpenWebText: 4.17
+
+
+(c) The speed of encoding is 800000 bytes per second 
+    = 0.8 MB per second
+    = 48 MB per minute 
+    = 0.048 GB per minute
+    = 2.88 GB per hour
+
+    So to tokenize the Pile (825 GB) = 286.5 hours = almost 10 days
+
+Speed raw data
+Speed: 897540.5621745073
+Speed: 908878.5456584203
+Original length in bytes: 12368
+Ratio TinyStories: 3.36
+Ratio OpenWebText: 3.97
+Speed: 854552.8095560063
+Speed: 860174.8675136116
+Original length in bytes: 904
+Ratio TinyStories: 3.24
+Ratio OpenWebText: 4.41
+Speed: 892280.4024487623
+Speed: 869879.3310411937
+Original length in bytes: 3197
+Ratio TinyStories: 3.35
+Ratio OpenWebText: 4.24
+Speed: 803289.898343162
+Speed: 790306.7628125432
+Original length in bytes: 1364
+Ratio TinyStories: 3.23
+Ratio OpenWebText: 4.53
+Speed: 862656.431122922
+Speed: 816294.9539181286
+Original length in bytes: 3328
+Ratio TinyStories: 3.66
+Ratio OpenWebText: 4.99
+Speed: 784726.5221791418
+Speed: 771892.9210084034
+Original length in bytes: 2847
+Ratio TinyStories: 2.99
+Ratio OpenWebText: 4.06
+Speed: 809326.7146912442
+Speed: 724832.0116221481
+Original length in bytes: 5234
+Ratio TinyStories: 3.21
+Ratio OpenWebText: 4.92
+Speed: 769219.8107573305
+Speed: 712756.400125013
+Original length in bytes: 8156
+Ratio TinyStories: 3.24
+Ratio OpenWebText: 4.96
+Speed: 802584.2640221103
+Speed: 749403.5382163188
+Original length in bytes: 2354
+Ratio TinyStories: 2.99
+Ratio OpenWebText: 4.46
+Speed: 893960.235924933
+Speed: 839319.8209575923
+Original length in bytes: 3657
+Ratio TinyStories: 2.86
+Ratio OpenWebText: 3.82
+
+
+(d) 
+
+The time mostly checks out.
+TinyStories train = 2.23 GB
+Actual time = 1 hour
+
+OpenWebText train
+12GB but I split it up into more chunks (30 -> 100)
+Took just 1.5 hours!
