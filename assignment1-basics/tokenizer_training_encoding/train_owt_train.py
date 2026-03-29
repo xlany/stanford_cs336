@@ -9,7 +9,7 @@ if __name__ == '__main__':
 	start = time.time()
 
 	input_path = './data/owt_train.txt'
-	vocab_size = 32000
+	vocab_size = 32_000
 	special_tokens = [bpe.END_OF_TEXT]
 	tokenizer = bpe.BytePairEncoderTokenizer(input_path=input_path, vocab_size=vocab_size, special_tokens=special_tokens)
 	vocab, merges = tokenizer.train()

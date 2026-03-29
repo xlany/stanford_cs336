@@ -8,8 +8,11 @@ from training import checkpointing
 
 import einops
 
+# VOCAB_FILEPATH = './tokenizer_training_encoding/train_bpe_tinystories_vocab.txt'
+# MERGES_FILEPATH = './tokenizer_training_encoding/train_bpe_tinystories_merges.txt'
 VOCAB_FILEPATH = './tokenizer_training_encoding/train_bpe_owt_train_vocab.txt'
 MERGES_FILEPATH = './tokenizer_training_encoding/train_bpe_owt_train_merges.txt'
+CHECKPOINT_FILEPATH = './checkpoints'
 LOG_PER_TOKEN = 10
 
 def probability_distr(
@@ -91,15 +94,14 @@ class LLM():
 				output_tokens.extend(sample.tolist())  # Track the generated tokens
 				if sample.item() == bpe.END_OF_TEXT_TOKEN:
 					break
-
+		print(f'Generated {len(output_tokens)} tokens.')
 		output_str = ''.join(self.tokenizer.decode(output_tokens))
-		print(output_str)
+		print(prompt + output_str)
 		return output_str
 
 
 if __name__=='__main__':
-	run_name = 'baseline_owt'
-	checkpoint_filepath = './checkpoints'
+	run_name = 'openwebtext'
 
 	device = torch.device("mps")
 
@@ -111,12 +113,14 @@ if __name__=='__main__':
 		d_ff=1344,
 		num_layers=4,
 		num_heads=16,
-		rope_theta=10_000,
+		rope_theta=4_000,
 		device=device,
 		dtype=torch.float32,
 	)
+	model = torch.compile(model, backend="aot_eager")
+
 	checkpointing.load_latest_checkpoint(
-		folder=f'{checkpoint_filepath}/{run_name}/',
+		folder=f'{CHECKPOINT_FILEPATH}/{run_name}/',
 		model=model,
 	)
 
@@ -134,8 +138,9 @@ if __name__=='__main__':
 		device=device,
 	)
 	llm.generate(
-		prompt="What is the capital of France?",
-		temperature=0.5,
+		prompt="Once upon a time...",
+		temperature=0.7,
 		top_p=0.95,
+		max_tokens=300,
 	)
 	

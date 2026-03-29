@@ -45,8 +45,11 @@ def load_latest_checkpoint(
     """Load latest checkpoint from folder.
     
     Latest is defined by the max step count.
+    Return: wandb_run_id, steps_already_run
     """
     steps = [int(f.split('.pt')[0]) for f in os.listdir(folder)]
+    if not steps:
+        return '', 0
     max_step = max(steps)
     return load_checkpoint(
         src=f'{folder}/{max_step}.pt',

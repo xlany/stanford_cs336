@@ -10,10 +10,12 @@ from training import (
 	loss_function,
 	gradient_clipping,
 	checkpointing,
+	learning_rate_schedule,
 )
 
 LOG_PER_STEP = 100
 CHECKPOINT_PER_STEP = 500
+LOSS_PER_STEP = 10
 
 def training_loop(
 	weights: torch.Tensor, 
@@ -28,9 +30,26 @@ def training_loop(
 		loss.backward() # Run backward pass, which computes gradients. 
 		optimizer.step() # Run optimizer step.
 
+def calc_test_loss(
+	test_inputs: torch.Tensor,
+	test_targets: torch.Tensor,
+	model: torch.nn.Module,
+) -> float:
+	model.eval()
+	with torch.no_grad():
+		test_logits = model.forward(test_inputs)  # Model step, model looks at tokens -> outputs predicted logits
+		test_loss = loss_function.avg_cross_entropy(  # Calculate loss via avg cross entropy
+			inputs=test_logits.view(-1, test_logits.size(-1)),
+			targets=test_targets.view(-1),
+		)
+	model.train()
+	return test_loss.cpu().item()
+
+
 def train(
 	run_name: str,
-	dataset_filepath: str,
+	train_data_filepath: str,
+	test_data_filepath: str,
 	checkpoint_filepath: str,
 	vocab_size: str,
 	batch_size: int,
@@ -39,21 +58,29 @@ def train(
 	d_ff: int,
 	num_layers: int,
 	num_heads: int,
-	rope_theta: int,
-	lr: float,
+	prenorm: bool,
+	rope_theta: int | None,
+	max_learning_rate: float,
+	min_learning_rate: float,
+	warmup_iters: int,
+	cosine_cycle_iters: int,
 	weight_decay: float,
 	betas: tuple[float, float],
 	max_l2_norm: float,
 	training_steps: int,
 	device: torch.device,
 	dtype: torch.dtype,
-):
+	lr_schedule: bool = True,
+) -> None:
 	"""Main training function."""
 	# Load long list of tokens via virtual memory mapping
 	# Thus it's still on disk rather than load into RAM
 	# When data_loading asks for a specific slice, the OS loads that page on-demand
-	dataset = np.load(dataset_filepath, mmap_mode='r')
-	print(f'Loaded dataset from {dataset_filepath}')
+	train_dataset = np.load(train_data_filepath, mmap_mode='r')
+	print(f'Loaded train data from {train_data_filepath}')
+
+	test_dataset = np.load(test_data_filepath, mmap_mode='r')
+	print(f'Loaded test data from {test_data_filepath}')
 
 	# Initialize model and optimizer
 	model = trans.Transformer(
@@ -66,10 +93,12 @@ def train(
 		rope_theta=rope_theta,
 		device=device,
 		dtype=dtype,
+		prenorm=prenorm,
 	)
+	model = torch.compile(model, backend="aot_eager")
 	optimizer = opt.AdamW(
 		model.parameters(),
-		lr=lr,
+		lr=max_learning_rate,  # This gets overridden by the lr schedule
 		weight_decay=weight_decay,
 		betas=betas,
 	)
@@ -100,6 +129,13 @@ def train(
 		)
 		wandb_run_id = run.id
 
+	test_inputs, test_targets = data_loading.load_batched_data(
+		dataset=test_dataset,
+		batch_size=batch_size,
+		context_length=context_length,
+		device=device,
+	)
+
 	# Start training!
 	for step in range(steps_already_run, training_steps):
 		if step % LOG_PER_STEP == 0:
@@ -109,23 +145,40 @@ def train(
 		# Model forward pass: [batch_size sequence_len vocab_size] = [32, 256, 10000] with logits of each of the 10000 possible words
 		# Loss function inputs: [word_position vocab_size] = [32 * 256, 10000]. 
 		# 	Flatten the previous output so that each row is the logits of the 10000 possible words for the position in [batch_size, sequence_len]
-		inputs, targets = data_loading.load_batched_data(
-			dataset=dataset,
+		train_inputs, train_targets = data_loading.load_batched_data(
+			dataset=train_dataset,
 			batch_size=batch_size,
 			context_length=context_length,
 			device=device,
 		)
+		if lr_schedule:
+			current_lr = learning_rate_schedule.lr_cosine_schedule(
+				it=step,
+				max_learning_rate=max_learning_rate,
+				min_learning_rate=min_learning_rate,
+				warmup_iters=warmup_iters,
+				cosine_cycle_iters=cosine_cycle_iters,
+			)
+			for param_group in optimizer.param_groups:
+				param_group['lr'] = current_lr
 		# Forward pass
 		optimizer.zero_grad()  # Reset the optimizer, ready to accumulate next round of gradients
-		logits = model.forward(inputs)  # Model step, model looks at tokens -> outputs predicted logits
-		loss = loss_function.avg_cross_entropy(  # Calculate loss via avg cross entropy
-			inputs=logits.view(-1, logits.size(-1)),
-			targets=targets.view(-1),
+		train_logits = model.forward(train_inputs)  # Model step, model looks at tokens -> outputs predicted logits
+		train_loss = loss_function.avg_cross_entropy(  # Calculate loss via avg cross entropy
+			inputs=train_logits.view(-1, train_logits.size(-1)),
+			targets=train_targets.view(-1),
 		)
-		run.log({'loss': loss.cpu().item()})
+		run.log({'train_loss': train_loss.cpu().item()}, step=step)
 		if step % LOG_PER_STEP == 0:
-			print(loss.cpu().item())
-		loss.backward()  # Calculate the gradients
+			print(train_loss.cpu().item())
+		if step % LOSS_PER_STEP == 0:
+			test_loss = calc_test_loss(
+				test_inputs=test_inputs,
+				test_targets=test_targets,
+				model=model,
+			)
+			run.log({'test_loss': test_loss}, step=step)
+		train_loss.backward()  # Calculate the gradients
 		gradient_clipping.clip_gradients(parameters=model.parameters(), max_l2_norm=max_l2_norm)  # Clip the gradients
 		optimizer.step()  # Optimizer step
 
@@ -149,28 +202,47 @@ def train(
 	run.finish()
 	
 if __name__=='__main__':
-	run_name = 'baseline_owt'
-	# dataset_filepath = './data/TinyStoriesV2-GPT4-valid_tokenized.npy'
-	dataset_filepath = './data/owt_train_tokenized.npy'
+	# train_data_filepath = './data/TinyStoriesV2-GPT4-train_tokenized.npy'
+	# test_data_filepath = './data/TinyStoriesV2-GPT4-valid_tokenized.npy'
+	train_data_filepath = './data/owt_train_tokenized.npy'
+	test_data_filepath = './data/owt_valid_tokenized.npy'
 	checkpoint_filepath = './checkpoints'
+
+	training_steps = 5_000
+	batch_size = 32
+
+	max_learning_rate = 1e-3
+	min_learning_rate = 1e-4
+	warmup_iters = 100
+
+	lr_schedule = True
+	vocab_size = 32_000
+
+	run_name = f'openwebtext_vocab_size_{vocab_size}'
 
 	train(
 		run_name=run_name,
-		dataset_filepath=dataset_filepath,
+		train_data_filepath=train_data_filepath,
+		test_data_filepath=test_data_filepath,
 		checkpoint_filepath=f'{checkpoint_filepath}/{run_name}/',
-		vocab_size=10_000,
-		batch_size=32,
+		vocab_size=vocab_size,
+		batch_size=batch_size,
 		context_length=256,
 		d_model=512,
 		d_ff=1344,
 		num_layers=4,
 		num_heads=16,
-		rope_theta=4_000,
-		lr=1e-3,
+		prenorm=True,
+		rope_theta=None,
+		max_learning_rate=max_learning_rate,
+		lr_schedule=lr_schedule,
+		min_learning_rate=min_learning_rate,
+		warmup_iters=warmup_iters,
+		cosine_cycle_iters=training_steps,
 		weight_decay=0.01,
 		betas=[0.9, 0.95],
 		max_l2_norm=1.0,
-		training_steps=5_000,
+		training_steps=training_steps,
 		device=torch.device("mps"),
 		dtype=torch.float32,
 	)

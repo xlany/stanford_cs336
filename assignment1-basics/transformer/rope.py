@@ -52,31 +52,56 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
 		return rope_cache
 
+	# def apply_rotary_emb(self, x: torch.Tensor, rope_cache: torch.Tensor):
+	# 	"""Apply the RoPE to the input tensor x.
+
+	# 	Adapted from my code for CS224N.
+	# 	"""
+	# 	batch_size, sequence_len, d_k = x.shape
+				
+	# 	# Reshape x to pair up consecutive dimensions for complex representation
+	# 	x_pairs = x.reshape(batch_size, sequence_len, d_k // 2, 2)
+		
+	# 	# Convert to complex representation
+	# 	x_complex = torch.view_as_complex(x_pairs) 
+	# 	rope_complex = torch.view_as_complex(rope_cache)
+		
+	# 	# Apply rotation via complex multiplication
+	# 	# rope_complex broadcasts across batch and heads dimensions
+	# 	rotated_complex = x_complex * rope_complex
+		
+	# 	# Convert back to real representation
+	# 	rotated_real = torch.view_as_real(rotated_complex)
+		
+	# 	# Reshape back to original dimensions
+	# 	rotated_x = rotated_real.reshape(*x.shape)
+		
+	# 	return rotated_x
+
 	def apply_rotary_emb(self, x: torch.Tensor, rope_cache: torch.Tensor):
 		"""Apply the RoPE to the input tensor x.
 
-		Adapted from my code for CS224N.
+		More manual than the previous implementation. Designed to not use torch.view_as_complex
+		which has strict stride requirements (breaks under batch_size=1).
 		"""
 		batch_size, sequence_len, d_k = x.shape
-				
-		# Reshape x to pair up consecutive dimensions for complex representation
-		x_pairs = x.reshape(batch_size, sequence_len, d_k // 2, 2)
 		
-		# Convert to complex representation
-		x_complex = torch.view_as_complex(x_pairs) 
-		rope_complex = torch.view_as_complex(rope_cache)
+		# Split d_k into consecutive pairs by separating even/odd indices
+		x1 = x[..., 0::2]  # even indices: shape (batch, seq, d_k//2)
+		x2 = x[..., 1::2]  # odd indices:  shape (batch, seq, d_k//2)
 		
-		# Apply rotation via complex multiplication
-		# rope_complex broadcasts across batch and heads dimensions
-		rotated_complex = x_complex * rope_complex
-		
-		# Convert back to real representation
-		rotated_real = torch.view_as_real(rotated_complex)
-		
+		# Extract cos and sin from rope_cache: shape (seq, d_k//2, 2) or (batch, seq, d_k//2, 2)
+		cos = rope_cache[..., 0]  # shape (..., seq, d_k//2)
+		sin = rope_cache[..., 1]  # shape (..., seq, d_k//2)
+
+		# Apply rotation via complex multiplication: [x1, x2] -> [x1*cos - x2*sin, x1*sin + x2*cos] matrix
+		rotated_x1 = x1 * cos - x2 * sin
+		rotated_x2 = x1 * sin + x2 * cos
+		rotated = torch.stack([rotated_x1, rotated_x2], dim=-1)  # (batch, seq, d_k//2, 2)
+
 		# Reshape back to original dimensions
-		rotated_x = rotated_real.reshape(*x.shape)
-		
-		return rotated_x
+		return rotated.reshape(batch_size, sequence_len, d_k)
+
 
 	def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
 		"""Perform RoPE calculation on input.

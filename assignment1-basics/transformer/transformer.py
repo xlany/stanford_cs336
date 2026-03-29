@@ -19,6 +19,7 @@ class TransformerBlock(torch.nn.Module):
 		rope_config: rope.RopeConfig | None = None,
 		device: torch.device | None = None, 
 		dtype: torch.dtype | None = None,
+		prenorm: bool = True,
 	) -> None:
 		super().__init__()
 
@@ -26,6 +27,7 @@ class TransformerBlock(torch.nn.Module):
 		self.rmsnorm2 = rmsnorm.RMSNorm(d_model, device=device, dtype=dtype)
 		self.multihead_self_attention = attention.CausalMultiHeadSelfAttention(d_model, num_heads, rope_config, device, dtype)
 		self.ffn = positionwise_feedforward.SwiGLU(d_model, d_ff, device, dtype)
+		self.prenorm = prenorm
 
 	def from_weights(self, weights: dict[str, torch.Tensor]) -> None:
 		"""Initialize from weights."""
@@ -91,12 +93,16 @@ class TransformerBlock(torch.nn.Module):
 				+ 6 * batch_size * sequence_length * d_model * d_ff
 				+ 3 * batch_size * sequence_length * d_ff
 		"""
-		attention_output = self.multihead_self_attention.forward(self.rmsnorm1.forward(x))
-		layer1 = x + attention_output
+		if self.prenorm:
+			attention_output = self.multihead_self_attention.forward(self.rmsnorm1.forward(x))
+			layer1 = x + attention_output
+			ffn_output = self.ffn.forward(self.rmsnorm2.forward(layer1))
+			return layer1 + ffn_output
 
-		ffn_output = self.ffn.forward(self.rmsnorm2.forward(layer1))
-		return layer1 + ffn_output
-			
+		# Postnorm
+		layer1 = self.rmsnorm1.forward(x + self.multihead_self_attention.forward(x))
+		return self.rmsnorm2.forward(layer1 + self.ffn.forward(layer1))
+				
 
 class Transformer(torch.nn.Module):
 	def __init__(
@@ -107,16 +113,19 @@ class Transformer(torch.nn.Module):
 	    num_layers: int,
 	    num_heads: int,
 	    d_ff: int,
-	    rope_theta: float,
+	    rope_theta: float | None = None,
 		device: torch.device | None = None, 
 		dtype: torch.dtype | None = None,
+		prenorm: bool = True,
 	) -> None:
 		super().__init__()
 
 		self.num_layers = num_layers
 		self.token_embedding = embedding.Embedding(vocab_size, d_model, device, dtype)
-		rope_config = rope.RopeConfig(theta=rope_theta, max_seq_len=context_length, d_k=int(d_model / num_heads))
-		self.transformer_blocks = torch.nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, rope_config, device, dtype) for _ in range(num_layers)])
+		rope_config = None
+		if rope_theta:
+			rope_config = rope.RopeConfig(theta=rope_theta, max_seq_len=context_length, d_k=int(d_model / num_heads))
+		self.transformer_blocks = torch.nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, rope_config, device, dtype, prenorm) for _ in range(num_layers)])
 		self.rmsnorm = rmsnorm.RMSNorm(d_model, device=device, dtype=dtype)
 		self.output_embedding = linear.Linear(d_model, vocab_size, device, dtype)
 
