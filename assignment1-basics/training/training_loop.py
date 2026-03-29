@@ -233,7 +233,7 @@ if __name__=='__main__':
 		num_layers=4,
 		num_heads=16,
 		prenorm=True,
-		rope_theta=None,
+		rope_theta=10_000,
 		max_learning_rate=max_learning_rate,
 		lr_schedule=lr_schedule,
 		min_learning_rate=min_learning_rate,
