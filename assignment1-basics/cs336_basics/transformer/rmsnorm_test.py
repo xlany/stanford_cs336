@@ -1,5 +1,5 @@
 import torch
-import transformer.rmsnorm as rmsnorm
+import cs336_basics.transformer.rmsnorm as rmsnorm
 
 def test_rmsnorm():
 	d_model = 2

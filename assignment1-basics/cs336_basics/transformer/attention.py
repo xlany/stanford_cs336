@@ -1,9 +1,9 @@
 import torch
 from einops import einsum, rearrange
-import transformer.linear as linear
+import cs336_basics.transformer.linear as linear
 import math
-import transformer.softmax as softmax
-import transformer.rope as rope
+import cs336_basics.transformer.softmax as softmax
+import cs336_basics.transformer.rope as rope
 
 def scaled_dot_product_attention(
 	Q: torch.Tensor,

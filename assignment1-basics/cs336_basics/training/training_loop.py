@@ -3,15 +3,13 @@ import numpy as np
 import os
 import wandb
 
-from transformer import transformer as trans
-from training import (
-	data_loading,
-	optimizer as opt,
-	loss_function,
-	gradient_clipping,
-	checkpointing,
-	learning_rate_schedule,
-)
+import cs336_basics.transformer.transformer as trans
+import cs336_basics.training.data_loading as data_loading
+import cs336_basics.training.optimizer as opt
+import cs336_basics.training.loss_function as loss_function
+import cs336_basics.training.gradient_clipping as gradient_clipping
+import cs336_basics.training.checkpointing as checkpointing
+import cs336_basics.training.learning_rate_schedule as learning_rate_schedule
 
 LOG_PER_STEP = 100
 CHECKPOINT_PER_STEP = 500

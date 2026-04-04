@@ -1,7 +1,7 @@
 import torch
 from einops import einsum
 import math
-import transformer.linear as linear
+import cs336_basics.transformer.linear as linear
 
 def _SiLU(x: torch.Tensor):
 	"""Element-wise.

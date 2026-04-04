@@ -1,6 +1,6 @@
 import torch
-import optimizer as optimizer_lib
-import training_loop
+import cs336_basics.training.optimizer as optimizer_lib
+import cs336_basics.training.training_loop as training_loop
 
 if __name__=='__main__':
 	training_steps = 10

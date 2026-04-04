@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from transformer import softmax
+import cs336_basics.transformer.softmax as softmax
 
 def cross_entropy(
 	inputs: torch.Tensor, 

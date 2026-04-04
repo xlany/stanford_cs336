@@ -1,11 +1,11 @@
 import torch
-import transformer.rmsnorm as rmsnorm
-import transformer.attention as attention
-import transformer.rope as rope
-import transformer.positionwise_feedforward as positionwise_feedforward
-import transformer.linear as linear
-import transformer.embedding as embedding
-import transformer.softmax as softmax
+import cs336_basics.transformer.rmsnorm as rmsnorm
+import cs336_basics.transformer.attention as attention
+import cs336_basics.transformer.rope as rope
+import cs336_basics.transformer.positionwise_feedforward as positionwise_feedforward
+import cs336_basics.transformer.linear as linear
+import cs336_basics.transformer.embedding as embedding
+import cs336_basics.transformer.softmax as softmax
 import typing
 import itertools
 

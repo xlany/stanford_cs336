@@ -12,25 +12,21 @@ from torch import Tensor
 import tokenizer.bpe as bpe
 import tokenizer.bpe_encoding as bpe_encoding
 
-from transformer import (
-    linear,
-    embedding,
-    rmsnorm,
-    positionwise_feedforward,
-    rope,
-    softmax,
-    attention,
-    transformer as transformer_lib,
-)
+import cs336_basics.transformer.linear as linear
+import cs336_basics.transformer.embedding as embedding
+import cs336_basics.transformer.rmsnorm as rmsnorm
+import cs336_basics.transformer.positionwise_feedforward as positionwise_feedforward
+import cs336_basics.transformer.rope as rope
+import cs336_basics.transformer.softmax as softmax
+import cs336_basics.transformer.attention as attention
+import cs336_basics.transformer.transformer as transformer_lib
 
-from training import (
-    loss_function,
-    optimizer,
-    learning_rate_schedule,
-    gradient_clipping,
-    data_loading,
-    checkpointing,
-)
+import cs336_basics.training.loss_function as loss_function
+import cs336_basics.training.optimizer as optimizer
+import cs336_basics.training.learning_rate_schedule as learning_rate_schedule
+import cs336_basics.training.gradient_clipping as gradient_clipping
+import cs336_basics.training.data_loading as data_loading
+import cs336_basics.training.checkpointing as checkpointing
 
 def run_linear(
     d_in: int,
@@ -464,7 +460,7 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    return positionwise_feedforward._SiLU(in_features)
 
 
 def run_get_batch(
@@ -629,11 +625,12 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    return checkpointing.load_checkpoint(
+    _, iteration = checkpointing.load_checkpoint(
         src=src,
         model=model,
         optimizer=optimizer,
     )
+    return iteration
 
 
 def get_tokenizer(

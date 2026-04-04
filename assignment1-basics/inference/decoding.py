@@ -3,8 +3,8 @@ import tokenizer.bpe_encoding as tokenizer_lib
 from tokenizer import bpe
 import bisect 
 
-from transformer import transformer as trans
-from training import checkpointing
+import cs336_basics.transformer.transformer as trans
+import cs336_basics.training.checkpointing as checkpointing
 
 import einops
 

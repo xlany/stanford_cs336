@@ -1,5 +1,5 @@
 import torch
-import transformer.linear as linear
+import cs336_basics.transformer.linear as linear
 
 def test_linear():
 	d_in = 2
