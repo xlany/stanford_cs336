@@ -1,0 +1,6 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python3.12",
+    "python.analysis.extraPaths": [
+        "/Users/xlany/Documents/AI/stanford_cs336/assignment1-basics"
+    ]
+}
