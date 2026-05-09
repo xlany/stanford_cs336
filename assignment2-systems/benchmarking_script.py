@@ -130,6 +130,7 @@ if __name__=='__main__':
 	parser.add_argument('--d_ff', type=int)
 	parser.add_argument('--num_layers', type=int)
 	parser.add_argument('--num_heads', type=int)
+	parser.add_argument('--device', type=str)
 
 	args = parser.parse_args()
 
@@ -144,7 +145,7 @@ if __name__=='__main__':
 		num_layers=args.num_layers,
 		num_heads=args.num_heads,
 		rope_theta=10_000,
-		device=torch.device("mps"),
+		device=torch.device(args.device),
 		dtype=torch.float32,
 	)
 
