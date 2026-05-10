@@ -8,6 +8,19 @@ import timeit
 import statistics
 import argparse
 
+# Conditional import since nvtx is installed on Linux but not Mac
+try:
+    import nvtx
+except ImportError:
+    import contextlib
+
+    class _NvtxStub:
+        @staticmethod
+        def range(*args, **kwargs):
+            return contextlib.nullcontext()
+
+    nvtx = _NvtxStub()
+
 
 def benchmark_forward_backwards(
 	model: trans.Transformer,
@@ -49,10 +62,12 @@ def benchmark_forward_backwards(
 			backward_times.append(backward_end_time - backward_start_time)
 	
 	for _ in range(num_warmups):
-		run_forward_backward_pass(record_time=False)
+		with nvtx.range("warmup"):   
+			run_forward_backward_pass(record_time=False)
 
 	for _ in range(num_trials):
-		run_forward_backward_pass(record_time=True)
+		with nvtx.range("trial"):   
+			run_forward_backward_pass(record_time=True)
 
 	return forward_times, backward_times
 
